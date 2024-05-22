@@ -4,8 +4,10 @@ from pyspark.sql.functions import avg, count, col, to_date, month, sum, explode,
 
 def create_spark_session():
     spark = SparkSession.builder \
-        .appName("PostgresAnalysis") \
-        .config("spark.driver.extraClassPath", "/path/to/postgresql-42.7.3.jar") \
+        .appName("Analisis") \
+        .config("spark.driver.extraClassPath", "/opt/spark-apps/postgresql-42.7.3.jar") \
+        .master("spark://spark-master:7077") \
+        .config("spark.jars", "postgresql-42.7.3.jar") \
         .getOrCreate()
     return spark
 
