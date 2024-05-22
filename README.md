@@ -13,7 +13,16 @@ kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic clientes_str
 
 Para ejecutar un map_reduce
 
+docker cp reservations_count.pig hadoop-namenode:/reservations_count.pig
+docker exec -it hadoop-namenode bash
+pig reservations_count.pig
+
 javac -classpath `hadoop classpath` -d reservations_classes ReservationsCount.java
 jar -cvf reservations.jar -C reservations_classes/ .
+
+docker cp ReservationsCount.jar hadoop-namenode:/ReservationsCount.jar
+docker exec -it hadoop-namenode bash
+hadoop jar ReservationsCount.jar ReservationsCount /path/to/input /path/to/output
+
 
 hadoop jar reservations.jar ReservationsCount /path/to/reservas.txt /path/to/output

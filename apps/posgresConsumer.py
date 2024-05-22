@@ -10,7 +10,7 @@ def read_from_postgres():
         .getOrCreate()
 
     # Define connection properties
-    jdbc_url = "jdbc:postgresql://database:9999/PrimOrd"
+    jdbc_url = "jdbc:postgresql://postgres:9999/PrimOrd"
     connection_properties = {
         "user": "primOrd",
         "password": "bdaPrimOrd",
