@@ -5,14 +5,14 @@ from pyspark.sql.functions import avg, count, col, to_date, month, sum, explode,
 def create_spark_session():
     spark = SparkSession.builder \
         .appName("Analisis") \
-        .config("spark.driver.extraClassPath", "/opt/spark-apps/postgresql-42.7.3.jar") \
+        .config("spark.driver.extraClassPath", "/opt/spark-apps/drivers/postgresql-42.7.3.jar") \
         .master("spark://spark-master:7077") \
         .config("spark.jars", "postgresql-42.7.3.jar") \
         .getOrCreate()
     return spark
 
 def read_table(spark, table_name):
-    jdbc_url = "jdbc:postgresql://postgres:9999/PrimOrd"
+    jdbc_url = "jdbc:postgresql://postgres:5432/PrimOrd"
     connection_properties = {
         "user": "primOrd",
         "password": "bdaPrimOrd",
