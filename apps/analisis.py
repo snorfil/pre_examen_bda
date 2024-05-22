@@ -1,110 +1,164 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import avg, count, col, to_date, month, sum, explode, split
 
-def read_from_postgres():
-    spark = SparkSession.builder \
-        .appName("DataAnalysis") \
-        .config("spark.driver.extraClassPath", "/opt/spark-apps/driverS/postgresql-42.7.3.jar") \
-        .master("spark://spark-master:7077") \
-        .config("spark.jars", "postgresql-42.7.3.jar") \
-        .getOrCreate()
 
-    # Define connection properties
-    jdbc_url = "jdbc:postgresql://spark-database-1:5432/PrimOrd"
+def create_spark_session():
+    spark = SparkSession.builder \
+        .appName("PostgresAnalysis") \
+        .config("spark.driver.extraClassPath", "/path/to/postgresql-42.7.3.jar") \
+        .getOrCreate()
+    return spark
+
+def read_table(spark, table_name):
+    jdbc_url = "jdbc:postgresql://localhost:9999/PrimOrd"
     connection_properties = {
         "user": "primOrd",
         "password": "bdaPrimOrd",
         "driver": "org.postgresql.Driver"
     }
 
-    try:
-        # Leer datos desde las tablas de Postgres
-        df_reservas = spark.read.jdbc(url=jdbc_url, table="reservas", properties=connection_properties)
-        df_menus = spark.read.jdbc(url=jdbc_url, table="menus", properties=connection_properties)
-        df_platos = spark.read.jdbc(url=jdbc_url, table="platos", properties=connection_properties)
-        df_hoteles = spark.read.jdbc(url=jdbc_url, table="hoteles", properties=connection_properties)
+    df = spark.read.jdbc(url=jdbc_url, table=table_name, properties=connection_properties)
+    return df
 
-        # Pregunta 1: ¿Cuáles son las preferencias alimenticias más comunes entre los clientes?
-        preferencias_comida = df_reservas.groupBy("Preferencias Comida").count().orderBy(col("count").desc())
-        print("Preferencias alimenticias más comunes entre los clientes:")
-        preferencias_comida.show()
 
-        # Pregunta 2: ¿Qué restaurante tiene el precio medio de menú más alto?
-        precio_medio_menus = df_menus.groupBy("ID Restaurante").agg(avg("Precio").alias("Precio Medio")).orderBy(col("Precio Medio").desc())
-        print("Restaurante con el precio medio de menú más alto:")
-        precio_medio_menus.show(1)
+def load_dataframes(spark):
+    empleados_df = read_table(spark, "empleados")
+    clientes_df = read_table(spark, "clientes")
+    reservas_df = read_table(spark, "reservas")
+    menus_df = read_table(spark, "menus")
+    platos_df = read_table(spark, "platos")
 
-        # Pregunta 3: ¿Existen tendencias en la disponibilidad de platos en los distintos restaurantes?
-        tendencias_disponibilidad = df_platos.groupBy("ID Restaurante", "Disponibilidad").count().orderBy("ID Restaurante")
-        print("Tendencias en la disponibilidad de platos en los distintos restaurantes:")
-        tendencias_disponibilidad.show()
+    return empleados_df, clientes_df, reservas_df, menus_df, platos_df
 
-        # Pregunta 4: ¿Cuál es la duración media de la estancia de los clientes de un hotel?
-        df_reservas = df_reservas.withColumn("Duracion Estancia", to_date(col("Fecha Salida"), "yyyy-MM-dd").cast("long") - to_date(col("Fecha Llegada"), "yyyy-MM-dd").cast("long"))
-        duracion_media_estancia = df_reservas.groupBy("ID Hotel").agg(avg("Duracion Estancia").alias("Duracion Media"))
-        print("Duración media de la estancia de los clientes de un hotel:")
-        duracion_media_estancia.show()
 
-        # Pregunta 5: ¿Existen periodos de máxima ocupación en función de las fechas de reserva?
-        periodos_maxima_ocupacion = df_reservas.groupBy("Fecha Llegada").count().orderBy(col("count").desc())
-        print("Periodos de máxima ocupación en función de las fechas de reserva:")
-        periodos_maxima_ocupacion.show()
+def preferencias_comunes(clientes_df):
+    preferencias_df = clientes_df.groupBy("preferencias_dieteticas").count().orderBy("count", ascending=False)
+    preferencias_df.show()
 
-        # Pregunta 6: ¿Cuántos empleados tiene de media cada hotel?
-        empleados_media = df_hoteles.withColumn("Num Empleados", size(split(col("empleados_ids"), ","))).agg(avg("Num Empleados").alias("Media Empleados"))
-        print("Número medio de empleados por hotel:")
-        empleados_media.show()
 
-        # Pregunta 7: ¿Cuál es el índice de ocupación de cada hotel y varía según la categoría de habitación?
-        indice_ocupacion = df_reservas.groupBy("ID Hotel", "Tipo Habitacion").count().orderBy("ID Hotel", "Tipo Habitacion")
-        print("Índice de ocupación de cada hotel según la categoría de habitación:")
-        indice_ocupacion.show()
+def restaurante_precio_medio(menus_df):
+    precio_medio_df = menus_df.groupBy("id_restaurante").avg("precio").orderBy("avg(precio)", ascending=False)
+    precio_medio_df.show()
 
-        # Pregunta 8: ¿Podemos estimar los ingresos generados por cada hotel basándonos en los precios de las habitaciones y los índices de ocupación?
-        df_habitaciones = spark.read.jdbc(url=jdbc_url, table="habitaciones", properties=connection_properties)
-        ingresos_hoteles = df_reservas.join(df_habitaciones, df_reservas["Id Habitacion"] == df_habitaciones["numero_habitacion"]) \
-            .groupBy("ID Hotel").agg(sum(col("tarifa_nocturna") * col("Duracion Estancia")).alias("Ingresos Estimados"))
-        print("Ingresos estimados generados por cada hotel:")
-        ingresos_hoteles.show()
 
-        # Pregunta 9: ¿Qué platos son los más y los menos populares entre los restaurantes?
-        platos_popularidad = df_reservas.groupBy("ID Plato").count().orderBy(col("count").desc())
-        print("Platos más y menos populares entre los restaurantes:")
-        platos_popularidad.show()
+def disponibilidad_platos(menus_df):
+    disponibilidad_df = menus_df.groupBy("id_restaurante", "disponibilidad").count().orderBy("id_restaurante",
+                                                                                             "disponibilidad")
+    disponibilidad_df.show()
 
-        # Pregunta 10: ¿Hay ingredientes o alérgenos comunes que aparezcan con frecuencia en los platos?
-        df_platos = df_platos.withColumn("Ingredientes", explode(split(col("ingredientes"), ",")))
-        ingredientes_frecuentes = df_platos.groupBy("Ingredientes").count().orderBy(col("count").desc())
-        print("Ingredientes o alérgenos comunes en los platos:")
-        ingredientes_frecuentes.show()
 
-        # Pregunta 11: ¿Existen pautas en las preferencias de los clientes en función de la época del año?
-        df_reservas = df_reservas.withColumn("Mes Llegada", month(col("Fecha Llegada")))
-        pautas_preferencias = df_reservas.groupBy("Mes Llegada", "Preferencias Comida").count().orderBy("Mes Llegada", "Preferencias Comida")
-        print("Pautas en las preferencias de los clientes en función de la época del año:")
-        pautas_preferencias.show()
+from pyspark.sql.functions import col, datediff
 
-        # Pregunta 12: ¿Los clientes con preferencias dietéticas específicas tienden a reservar en restaurantes concretos?
-        preferencias_restaurantes = df_reservas.groupBy("ID Restaurante", "Preferencias Comida").count().orderBy("ID Restaurante", "Preferencias Comida")
-        print("Preferencias dietéticas específicas en restaurantes concretos:")
-        preferencias_restaurantes.show()
 
-        # Pregunta 13: ¿Existen discrepancias entre la disponibilidad de platos comunicada y las reservas reales realizadas?
-        discrepancias_platos = df_reservas.groupBy("ID Plato").agg(count("ID Reserva").alias("Reservas Reales")).join(df_platos.groupBy("ID Plato").agg(sum("Disponibilidad").alias("Disponibilidad Comunicado")), "ID Plato").withColumn("Discrepancia", col("Disponibilidad Comunicado") - col("Reservas Reales"))
-        print("Discrepancias entre la disponibilidad de platos comunicada y las reservas reales realizadas:")
-        discrepancias_platos.show()
+def duracion_estancia(reservas_df):
+    reservas_df = reservas_df.withColumn("duracion", datediff(col("fecha_salida"), col("fecha_llegada")))
+    duracion_media_df = reservas_df.groupBy("id_hotel").avg("duracion")
+    duracion_media_df.show()
 
-        # Pregunta 14: ¿Cómo se comparan los precios de las habitaciones de los distintos hoteles y existen valores atípicos?
-        precios_habitaciones = df_habitaciones.groupBy("ID Hotel").agg(avg("tarifa_nocturna").alias("Precio Medio"))
-        print("Comparación de los precios de las habitaciones de los distintos hoteles y valores atípicos:")
-        precios_habitaciones.show()
 
-    except Exception as e:
-        print("Error reading data from PostgreSQL:", e)
+def periodos_maxima_ocupacion(reservas_df):
+    ocupacion_df = reservas_df.groupBy("fecha_llegada").count().orderBy("count", ascending=False)
+    ocupacion_df.show()
 
-    finally:
-        # Stop SparkSession
-        spark.stop()
+
+def empleados_por_hotel(hoteles_df):
+    from pyspark.sql.functions import size
+    hoteles_df = hoteles_df.withColumn("num_empleados", size(col("id_empleados")))
+    empleados_media_df = hoteles_df.agg({"num_empleados": "avg"})
+    empleados_media_df.show()
+
+
+def indice_ocupacion(reservas_df):
+    ocupacion_df = reservas_df.groupBy("id_hotel", "tipo_habitacion").count().orderBy("id_hotel", "tipo_habitacion")
+    ocupacion_df.show()
+
+
+def ingresos_por_hotel(reservas_df, menus_df):
+    ingresos_df = reservas_df.join(menus_df, reservas_df.id_restaurante == menus_df.id_restaurante, "left") \
+        .groupBy("id_hotel").agg({"precio": "sum"})
+    ingresos_df.show()
+
+
+def popularidad_platos(menus_df, platos_df):
+    popularidad_df = menus_df.join(platos_df, menus_df.id_plato == platos_df.id_plato, "left") \
+        .groupBy("nombre_plato").count().orderBy("count", ascending=False)
+    popularidad_df.show()
+
+
+def ingredientes_comunes(platos_df):
+    ingredientes_df = platos_df.groupBy("ingredientes").count().orderBy("count", ascending=False)
+    ingredientes_df.show()
+
+def preferencias_estacionales(reservas_df, clientes_df):
+    estacionales_df = reservas_df.join(clientes_df, reservas_df.id_cliente == clientes_df.id_cliente, "left") \
+                                 .groupBy("preferencias_dieteticas", "fecha_llegada").count().orderBy("count", ascending=False)
+    estacionales_df.show()
+
+def preferencias_restaurante(clientes_df, reservas_df):
+    preferencias_restaurante_df = reservas_df.join(clientes_df, reservas_df.id_cliente == clientes_df.id_cliente, "left") \
+                                             .groupBy("id_restaurante", "preferencias_dieteticas").count().orderBy("count", ascending=False)
+    preferencias_restaurante_df.show()
+
+def discrepancias_platos(menus_df, reservas_df):
+    discrepancias_df = menus_df.join(reservas_df, menus_df.id_restaurante == reservas_df.id_restaurante, "left") \
+                               .groupBy("id_restaurante", "disponibilidad").agg({"id_reserva": "count"})
+    discrepancias_df.show()
+
+def comparacion_precios(hoteles_df, menus_df):
+    comparacion_df = hoteles_df.join(menus_df, hoteles_df.id_hotel == menus_df.id_restaurante, "left") \
+                               .groupBy("nombre_hotel").agg({"precio": "avg"}).orderBy("avg(precio)", ascending=False)
+    comparacion_df.show()
+
+
+def main():
+    spark = create_spark_session()
+
+    # Cargar DataFrames
+    empleados_df, clientes_df, reservas_df, menus_df, platos_df = load_dataframes(spark)
+
+    # 1. Análisis de las preferencias de los clientes
+    print("Análisis de las preferencias de los clientes:")
+    preferencias_comunes(clientes_df)
+
+    # 2. Análisis del rendimiento del restaurante
+    print("Análisis del rendimiento del restaurante:")
+    restaurante_precio_medio(menus_df)
+    disponibilidad_platos(menus_df)
+
+    # 3. Patrones de reserva
+    print("Patrones de reserva:")
+    duracion_estancia(reservas_df)
+    periodos_maxima_ocupacion(reservas_df)
+
+    # 4. Gestión de empleados
+    print("Gestión de empleados:")
+    empleados_por_hotel(empleados_df)
+
+    # 5. Ocupación e ingresos del hotel
+    print("Ocupación e ingresos del hotel:")
+    indice_ocupacion(reservas_df)
+    ingresos_por_hotel(reservas_df, menus_df)
+
+    # 6. Análisis de menús
+    print("Análisis de menús:")
+    popularidad_platos(menus_df, platos_df)
+    ingredientes_comunes(platos_df)
+
+    # 7. Comportamiento de los clientes
+    print("Comportamiento de los clientes:")
+    preferencias_estacionales(reservas_df, clientes_df)
+    preferencias_restaurante(clientes_df, reservas_df)
+
+    # 8. Garantía de calidad
+    print("Garantía de calidad:")
+    discrepancias_platos(menus_df, reservas_df)
+
+    # 9. Análisis de mercado
+    print("Análisis de mercado:")
+    comparacion_precios(empleados_df, menus_df)
+
+    spark.stop()
+
 
 if __name__ == "__main__":
-    read_from_postgres()
+    main()
