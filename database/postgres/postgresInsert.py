@@ -57,7 +57,7 @@ def main():
     try:
         create_tables(conn)
         insert_data_empleados(conn, '../../data/postgres/empleados.csv')
-        insert_data_hoteles(conn, '../..x/data/postgres/hoteles.csv')
+        insert_data_hoteles(conn, '../../data/postgres/hoteles.csv')
     finally:
         conn.close()
 
