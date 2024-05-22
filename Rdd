@@ -1,0 +1,187 @@
+# Spark RDD Cheatsheet
+
+## Introducción
+
+Este documento proporciona una guía completa sobre cómo trabajar con RDDs (Resilient Distributed Datasets) en Apache Spark. Incluye cómo cargar datos, seleccionar, filtrar, agrupar, unir y realizar otras operaciones comunes.
+
+## Configuración de Spark y Creación de RDD
+
+\`\`\`python
+from pyspark import SparkConf, SparkContext
+
+# Crear una configuración y un contexto de Spark
+conf = SparkConf().setAppName("RDDOperations").setMaster("local[*]")
+sc = SparkContext(conf=conf)
+
+# Crear un RDD a partir de una lista
+data = [1, 2, 3, 4, 5]
+rdd = sc.parallelize(data)
+
+# Crear un RDD a partir de un archivo
+rdd_from_file = sc.textFile("path/to/file.txt")
+\`\`\`
+
+## Operaciones Básicas
+
+\`\`\`python
+# Contar el número de elementos
+count = rdd.count()
+
+# Tomar los primeros N elementos
+first_elements = rdd.take(3)
+
+# Mostrar los elementos
+for element in rdd.collect():
+    print(element)
+\`\`\`
+
+## Transformaciones
+
+Las transformaciones crean un nuevo RDD a partir de uno existente. Las transformaciones son "perezosas", es decir, no se ejecutan hasta que se realiza una acción.
+
+\`\`\`python
+# map: Aplica una función a cada elemento
+rdd_squared = rdd.map(lambda x: x * x)
+
+# filter: Filtra los elementos según una condición
+rdd_filtered = rdd.filter(lambda x: x % 2 == 0)
+
+# flatMap: Aplica una función a cada elemento y aplana el resultado
+rdd_flat_mapped = rdd.flatMap(lambda x: (x, x*2))
+
+# distinct: Elimina duplicados
+rdd_distinct = rdd.distinct()
+
+# sample: Muestra una fracción de los datos
+rdd_sampled = rdd.sample(False, 0.5)
+
+# union: Une dos RDDs
+rdd_union = rdd.union(rdd_filtered)
+
+# intersection: Intersección de dos RDDs
+rdd_intersection = rdd.intersection(rdd_filtered)
+
+# subtract: Resta dos RDDs
+rdd_subtracted = rdd.subtract(rdd_filtered)
+\`\`\`
+
+## Acciones
+
+Las acciones devuelven un valor al controlador del programa Spark. Las acciones disparan la ejecución de las transformaciones perezosas.
+
+\`\`\`python
+# collect: Devuelve todos los elementos del RDD como una lista
+collected = rdd.collect()
+
+# reduce: Aplica una función de reducción a los elementos del RDD
+sum_rdd = rdd.reduce(lambda x, y: x + y)
+
+# count: Cuenta el número de elementos
+count = rdd.count()
+
+# first: Devuelve el primer elemento
+first = rdd.first()
+
+# take: Toma los primeros N elementos
+taken = rdd.take(3)
+
+# saveAsTextFile: Guarda el RDD como un archivo de texto
+rdd.saveAsTextFile("path/to/output")
+\`\`\`
+
+## Operaciones sobre Pares (Key-Value)
+
+Los RDDs pueden contener pares clave-valor, lo que es útil para muchas operaciones de datos.
+
+\`\`\`python
+# Crear un RDD de pares clave-valor
+pairs = sc.parallelize([("a", 1), ("b", 2), ("a", 3)])
+
+# groupByKey: Agrupa los valores por clave
+grouped = pairs.groupByKey().mapValues(list)
+
+# reduceByKey: Reduce los valores por clave usando una función de reducción
+summed = pairs.reduceByKey(lambda x, y: x + y)
+
+# sortByKey: Ordena los elementos por clave
+sorted_pairs = pairs.sortByKey()
+
+# join: Une dos RDDs por clave
+other_pairs = sc.parallelize([("a", 4), ("b", 5), ("c", 6)])
+joined = pairs.join(other_pairs)
+
+# cogroup: Realiza la agrupación cogroup sobre dos RDDs
+cogrouped = pairs.cogroup(other_pairs).mapValues(lambda x: (list(x[0]), list(x[1])))
+\`\`\`
+
+## Persistencia y Almacenamiento
+
+Para mejorar el rendimiento, se pueden almacenar RDDs en memoria o disco.
+
+\`\`\`python
+# Persistir en memoria
+rdd.persist()
+
+# Persistir en memoria y disco
+rdd.persist(StorageLevel.MEMORY_AND_DISK)
+
+# Liberar el RDD de la memoria
+rdd.unpersist()
+\`\`\`
+
+## Ejemplos específicos de tus datos (Clientes, Reservas, Menús, etc.)
+
+### 1. Crear RDDs desde archivos
+
+\`\`\`python
+# Leer archivos
+clientes_rdd = sc.textFile("/opt/spark-data/json/clientes.json")
+reservas_rdd = sc.textFile("/opt/spark-data/txt/reservas.txt")
+menus_rdd = sc.textFile("/opt/spark-data/csv/menus.csv")
+platos_rdd = sc.textFile("/opt/spark-data/csv/platos.csv")
+\`\`\`
+
+### 2. Parsear y mapear datos
+
+\`\`\`python
+# Parsear JSON y CSV
+import json
+clientes_rdd = clientes_rdd.map(lambda x: json.loads(x))
+menus_rdd = menus_rdd.map(lambda line: line.split(","))
+
+# Parsear reservas
+def parse_reserva(line):
+    fields = line.split("***")
+    return {
+        "id_cliente": fields[1].split(": ")[1],
+        "fecha_llegada": fields[2].split(": ")[1],
+        "fecha_salida": fields[3].split(": ")[1],
+        "tipo_habitacion": fields[4].split(": ")[1],
+        "preferencias_comida": fields[5].split(": ")[1],
+        "id_habitacion": fields[6].split(": ")[1],
+        "id_restaurante": fields[7].split(": ")[1]
+    }
+
+reservas_rdd = reservas_rdd.flatMap(lambda line: line.split("\\n")).filter(lambda x: x.startswith("*** Reserva")).map(parse_reserva)
+\`\`\`
+
+### 3. Operaciones con datos
+
+\`\`\`python
+# Filtrar reservas por fecha
+reservas_filtradas = reservas_rdd.filter(lambda x: x['fecha_llegada'] >= '2023-01-01')
+
+# Unir datos de clientes y reservas
+reservas_por_cliente = clientes_rdd.map(lambda x: (x['id_cliente'], x)).join(reservas_rdd.map(lambda x: (x['id_cliente'], x)))
+
+# Agrupar y contar reservas por tipo de habitación
+reservas_por_tipo_habitacion = reservas_rdd.map(lambda x: (x['tipo_habitacion'], 1)).reduceByKey(lambda x, y: x + y)
+
+# Calcular el precio medio del menú por restaurante
+menus_rdd = menus_rdd.map(lambda x: (x[0], float(x[2])))  # (id_restaurante, precio)
+precio_medio_menus = menus_rdd.groupByKey().mapValues(lambda prices: sum(prices) / len(prices))
+\`\`\`
+
+## Conclusión
+
+Este cheatsheet cubre las operaciones más comunes que puedes realizar con RDDs en Spark, incluyendo la creación, transformación, y acciones sobre RDDs, así como operaciones específicas con pares clave-valor. Estos ejemplos deben ayudarte a manipular y analizar tus datos de manera eficiente utilizando RDDs en diferentes contextos.
