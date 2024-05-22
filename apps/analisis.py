@@ -10,7 +10,7 @@ def create_spark_session():
     return spark
 
 def read_table(spark, table_name):
-    jdbc_url = "jdbc:postgresql://localhost:9999/PrimOrd"
+    jdbc_url = "jdbc:postgresql://database:9999/PrimOrd"
     connection_properties = {
         "user": "primOrd",
         "password": "bdaPrimOrd",
