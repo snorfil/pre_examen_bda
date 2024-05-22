@@ -4,13 +4,13 @@ from pyspark.sql import SparkSession
 def read_from_postgres():
     spark = SparkSession.builder \
         .appName("ReadFromPostgres") \
-        .config("spark.driver.extraClassPath", "/opt/spark-apps/postgresql-42.7.3.jar") \
+        .config("spark.driver.extraClassPath", "/opt/spark-apps/drivers/postgresql-42.7.3.jar") \
         .master("spark://spark-master:7077") \
         .config("spark.jars", "postgresql-42.7.3.jar") \
         .getOrCreate()
 
     # Define connection properties
-    jdbc_url = "jdbc:postgresql://localhost:9999/PrimOrd"
+    jdbc_url = "jdbc:postgresql://database:9999/PrimOrd"
     connection_properties = {
         "user": "primOrd",
         "password": "bdaPrimOrd",

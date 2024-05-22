@@ -10,3 +10,10 @@
 ### Con el siguiente comando cambiando el --topic se vuelve consumidor para verificar el productor
 
 kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic clientes_stream --from-beginning
+
+Para ejecutar un map_reduce
+
+javac -classpath `hadoop classpath` -d reservations_classes ReservationsCount.java
+jar -cvf reservations.jar -C reservations_classes/ .
+
+hadoop jar reservations.jar ReservationsCount /path/to/reservas.txt /path/to/output
